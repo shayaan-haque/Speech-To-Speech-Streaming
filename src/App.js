@@ -23,7 +23,6 @@ function App() {
     { label: "Hindi", value: "hi" },
     { label: "Italian", value: "it" },
     { label: "Japanese", value: "ja" },
-    { label: "Kannada", value: "kn" },
     { label: "Korean", value: "ko" },
     { label: "Malayalam", value: "ml" },
     { label: "Marathi", value: "mr" },
@@ -43,7 +42,7 @@ function App() {
 
   const handleFileChange = (event) => {
     setVideoFile(event.target.files[0]);
-    setErrorMessage(""); // Clear error when file is selected
+    setErrorMessage(""); 
   };
 
   const handleUpload = async () => {
