@@ -64,12 +64,12 @@ def create_subtitle_file(transcribed_segments, language, output_srt_path):
     subs = SubRipFile()
 
     for idx, segment in enumerate(transcribed_segments):
-        # Convert timedelta to SubRipTime
+ 
         start_time = timedelta_to_subrip_time(timedelta(seconds=segment['start']))
         end_time = timedelta_to_subrip_time(timedelta(seconds=segment['end']))
-        text = segment['text']  # Use original transcribed text
+        text = segment['text'] 
 
-        # If the selected language is not English, translate the text
+        
         text = translate_text(segment['text'], language)
 
         subtitle = SubRipItem(index=idx + 1, start=start_time, end=end_time, text=text)
@@ -100,6 +100,15 @@ def embed_subtitles(video_path, subtitle_path, output_path):
     ]
     subprocess.run(command, check=True)
 
+def generate_summary(text):
+    prompt = """Please summarize the following text: "{text}". Keep the summary concise and clear."""
+    prompt_template = PromptTemplate(input_variables=["text"], template=prompt)
+    llm = ChatGoogleGenerativeAI(model='gemini-1.5-flash')
+    chain = prompt_template | llm | StrOutputParser()
+    summary = chain.invoke({"text": text})
+    return summary
+
+
 @app.route('/upload', methods=['POST'])
 def process_video():
     file = request.files['video']
@@ -117,11 +126,14 @@ def process_video():
         # Step 2: Transcribe audio
         transcribed_data = whisper.load_model("base").transcribe(audio_path)
 
-        # Step 3: Translate text (if needed)
+        # Step 3: Generate summary of the transcription
+        summary = generate_summary(transcribed_data['text'])
+
+        # Step 4: Translate text (if needed)
         transcribed_text = transcribed_data['text']
         translated_text = translate_text(transcribed_text, language)  # Translate text to the target language
 
-        # Step 4: Create SRT file based on caption option
+        # Step 5: Create SRT file based on caption option
         srt_path = './uploads/captions.srt'
         if caption_option == "none":
             # No captions requested, skip subtitle generation
@@ -133,26 +145,29 @@ def process_video():
             # Generate captions in the selected language (language code, e.g., "en")
             create_subtitle_file(transcribed_data['segments'], caption_option, srt_path)
 
-        # Step 5: Generate translated audio
+        # Step 6: Generate translated audio
         translated_audio_path = './uploads/translated_audio.mp3'
         text_to_speech(translated_text, translated_audio_path, language)
 
-        # Step 6: Adjust audio length
+        # Step 7: Adjust audio length
         adjusted_audio_path = './uploads/adjusted_audio.mp3'
         adjust_audio_length(translated_audio_path, audio_path, adjusted_audio_path)
 
-        # Step 7: Replace audio in the video
+        # Step 8: Replace audio in the video
         temp_video_path = './output_videos/temp_video.mp4'
         replace_audio(video_filename, adjusted_audio_path, temp_video_path)
 
-        # Step 8: Embed subtitles into the video (if captions are selected)
+        # Step 9: Embed subtitles into the video (if captions are selected)
         final_video_path = os.path.abspath("./output_videos/translated_with_captions.mp4")
         if caption_option != "none":
             embed_subtitles(temp_video_path, srt_path, final_video_path)
 
-        # Return the translated video with captions
+      
         filename = os.path.basename(final_video_path)
-        return jsonify({"output_video": filename})
+        return jsonify({
+            "output_video": filename,
+            "summary": summary  
+        })
 
     return jsonify({"error": "No file uploaded"}), 400
 

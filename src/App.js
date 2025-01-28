@@ -10,6 +10,8 @@ function App() {
   const [translatedVideo, setTranslatedVideo] = useState("");
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const [videoSummary, setVideoSummary] = useState("");
+
 
   const languageOptions = [
     { label: "Arabic", value: "ar" },
@@ -82,7 +84,9 @@ function App() {
       setErrorMessage("");
       const response = await axios.post("http://127.0.0.1:5000/upload", formData);
       const videoUrl = `http://127.0.0.1:5000/output_videos/${response.data.output_video}`;
+      const summary = response.data.summary;  
       setTranslatedVideo(videoUrl);
+      setVideoSummary(summary);  
     } catch (error) {
       setErrorMessage("Failed to process the video. Please try again.");
     } finally {
@@ -198,6 +202,12 @@ function App() {
                 </p>
               </div>
             )}
+             {videoSummary && (
+    <div className="mt-4 p-4 bg-gray-100 rounded-md">
+      <h2 className="text-lg font-semibold text-gray-800 mb-2">Video Summary</h2>
+      <p>{videoSummary}</p>
+    </div>
+  )}
           </div>
         </div>
       </div>
