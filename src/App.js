@@ -1,7 +1,5 @@
-import React, { useState } from "react";
-import axios from "axios";
-import ReactPlayer from "react-player";
-import image from "./images/background.png";
+import React, { useState, useRef } from "react";
+import { Globe, MessageSquare, Zap, Upload, Settings, Play } from 'lucide-react';
 
 function App() {
   const [videoFile, setVideoFile] = useState(null);
@@ -11,11 +9,19 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [videoSummary, setVideoSummary] = useState("");
+  const [transcription, setTranscription] = useState("");
 
+  // Refs for scroll functionality
+  const featuresRef = useRef(null);
+  const howItWorksRef = useRef(null);
 
+  const scrollToSection = (ref) => {
+    ref.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  // Rest of the state and handlers remain the same...
   const languageOptions = [
     { label: "Arabic", value: "ar" },
-    { label: "Bengali", value: "bn" },
     { label: "Chinese", value: "zh" },
     { label: "Dutch", value: "nl" },
     { label: "English", value: "en" },
@@ -27,12 +33,9 @@ function App() {
     { label: "Italian", value: "it" },
     { label: "Japanese", value: "ja" },
     { label: "Korean", value: "ko" },
-    { label: "Malayalam", value: "ml" },
     { label: "Marathi", value: "mr" },
-    { label: "Persian", value: "fa" },
     { label: "Polish", value: "pl" },
     { label: "Portuguese", value: "pt" },
-    { label: "Punjabi", value: "pa" },
     { label: "Russian", value: "ru" },
     { label: "Spanish", value: "es" },
     { label: "Swedish", value: "sv" },
@@ -44,20 +47,13 @@ function App() {
   ];
 
   const captionOptions = [
-  { label: "No Captions", value: "none" },
-  { label: "Captions in Converted Language", value: "translated" },
-  ...languageOptions.map(lang => ({
-    label: `${lang.label}`, 
-    value: lang.value 
-  }))
-];
-<select name="captions" id="captions">
-  {captionOptions.map(option => (
-    <option value={option.value} key={option.value}>
-      {option.label}
-    </option>
-  ))}
-</select>
+    { label: "No Captions", value: "none" },
+    { label: "Captions in Converted Language", value: "translated" },
+    ...languageOptions.map(lang => ({
+      label: `${lang.label}`,
+      value: lang.value 
+    }))
+  ];
 
   const handleFileChange = (event) => {
     setVideoFile(event.target.files[0]);
@@ -77,16 +73,21 @@ function App() {
     const formData = new FormData();
     formData.append("video", videoFile);
     formData.append("language", language);
-    formData.append("caption_option", captionOption);  
+    formData.append("caption_option", captionOption);
 
     try {
       setLoading(true);
       setErrorMessage("");
-      const response = await axios.post("http://127.0.0.1:5000/upload", formData);
-      const videoUrl = `http://127.0.0.1:5000/output_videos/${response.data.output_video}`;
-      const summary = response.data.summary;  
+      const response = await fetch("http://127.0.0.1:5000/upload", {
+        method: 'POST',
+        body: formData,
+      });
+      const data = await response.json();
+      
+      const videoUrl = `http://127.0.0.1:5000/output_videos/${data.output_video}`;
       setTranslatedVideo(videoUrl);
-      setVideoSummary(summary);  
+      setVideoSummary(data.summary);
+      setTranscription(data.transcription);
     } catch (error) {
       setErrorMessage("Failed to process the video. Please try again.");
     } finally {
@@ -95,124 +96,244 @@ function App() {
   };
 
   return (
-    <>
-      <div className="flex bg-gradient-to-r from-blue-50 to-blue-100 justify-center h-28">
-        <h1 className="text-8xl bg-gradient-to-r from-blue-400 to-blue-900 bg-clip-text text-transparent animate-flow">
-          Speech To Speech Streaming
-        </h1>
-      </div>
-      <div className="relative bg-gradient-to-r from-blue-50 to-blue-100 min-h-screen flex flex-col items-center justify-start px-4">
-        <div className="absolute inset-0 z-0">
-          <img
-            src={image}
-            alt="Background"
-            className="w-full h-full object-cover"
-          />
+    <div className="min-h-screen bg-gradient-to-b from-slate-900 to-indigo-900">
+      {/* Navigation */}
+      <nav className="bg-black/20 backdrop-blur-sm fixed w-full z-50">
+        <div className="max-w-7xl mx-auto px-4 py-3 flex justify-between items-center">
+          <h1 className="text-2xl text-white font-bold">Speech Translation</h1>
+          <div className="space-x-6">
+            <button className="text-gray-200 hover:text-white">
+              Home
+            </button>
+            <button 
+              onClick={() => scrollToSection(featuresRef)}
+              className="text-gray-200 hover:text-white"
+            >
+              Features
+            </button>
+            <button 
+              onClick={() => scrollToSection(howItWorksRef)}
+              className="text-gray-200 hover:text-white"
+            >
+              How It Works
+            </button>
+          </div>
         </div>
-        <div className="z-20 bg-blue-50 shadow-lg rounded-lg p-6 w-full max-w-3xl mt-12">
-          <div className="flex justify-between">
-            <h1 className="text-2xl py-2">Upload Your Video</h1>
-            <p className="text-xs mt-4 text-gray-500">Only MP4 and MOV formats</p>
-          </div>
-          <input
-            type="file"
-            accept="video/mp4, video/mov"
-            onChange={handleFileChange}
-            className="block w-full text-base text-gray-900 border border-gray-300 rounded-lg cursor-pointer bg-gray-50 focus:outline-none focus:ring focus:ring-blue-300"
-          />
-          <h1 className="text-2xl py-2">Choose Language</h1>
-          <div className="mb-4 relative">
-            <select
-              value={language}
-              onChange={(e) => setLanguage(e.target.value)}
-              className="block w-full px-3 py-2 text-sm text-gray-900 border border-gray-300 rounded-lg bg-gray-50 focus:ring focus:ring-blue-300 appearance-none"
-            >
-              {languageOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-            <span className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 pointer-events-none">
-              &#9660;
-            </span>
-          </div>
+      </nav>
 
-          <h1 className="text-2xl pr-2">Choose Captions</h1>
-          <div className="mb-4 relative">
-            <select
-              value={captionOption}
-              onChange={(e) => setCaptionOption(e.target.value)}
-              className="block w-full px-3 py-2 text-sm text-gray-900 border border-gray-300 rounded-lg bg-gray-50 focus:ring focus:ring-blue-300 appearance-none"
-            >
-              {captionOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-            <span className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 pointer-events-none">
-              &#9660;
-            </span>
-          </div>
-
-          {errorMessage && (
-            <div className="text-red-500 text-sm font-medium mb-4">
-              {errorMessage}
-            </div>
-          )}
-
-          <button
-            onClick={handleUpload}
-            disabled={loading}
-            className={`w-full px-4 py-2 text-white font-semibold rounded-lg ${
-              loading
-                ? "bg-blue-300 cursor-not-allowed"
-                : "bg-blue-500 hover:bg-blue-600"
-            }`}
-          >
-            {loading ? "Processing..." : "Convert Video"}
-          </button>
-
-          {loading && (
-            <div className="flex justify-center items-center mt-6">
-              <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-blue-500"></div>
-              <p className="text-gray-600 text-lg ml-4">Almost there...</p>
-            </div>
-          )}
-
-          <div className="mt-6">
-            {videoFile && (
-              <div className="mb-6">
-                <h2 className="text-lg font-semibold text-gray-800 mb-2">
-                  Original Video
-                </h2>
-                <ReactPlayer url={URL.createObjectURL(videoFile)} controls />
-              </div>
-            )}
-
-            {translatedVideo && (
+      {/* Main Content */}
+      <div className="pt-16">
+        {/* Hero Section */}
+        <div className="text-center py-20 px-4">
+          <h1 className="text-6xl font-bold text-white mb-6">
+            Transform Your Videos Into Any Language
+          </h1>
+          <p className="text-xl text-gray-300 mb-8">
+            Upload your video and get instant translations with perfect meaning and natural voices
+          </p>
+          
+          {/* Main Upload Section */}
+          <div className="max-w-4xl mx-auto bg-white/10 backdrop-blur-md rounded-xl p-8 shadow-2xl">
+            {/* Existing upload form content... */}
+            <div className="grid gap-8">
+              {/* File Upload */}
               <div>
-                <h2 className="text-lg font-semibold text-gray-800 mb-2">
-                  Translated Video
-                </h2>
-                <ReactPlayer url={translatedVideo} controls />
-                <p className="text-xs mt-4 text-gray-500">
-                  To download your translated video, click on 3 dots and download
-                </p>
+                <label className="block text-white text-lg font-medium mb-4">Upload Video</label>
+                <input
+                  type="file"
+                  accept="video/mp4, video/mov"
+                  onChange={handleFileChange}
+                  className="w-full px-4 py-3 bg-white/20 border border-gray-300/30 rounded-lg text-white"
+                />
               </div>
-            )}
-             {videoSummary && (
-    <div className="mt-4 p-4 bg-gray-100 rounded-md">
-      <h2 className="text-lg font-semibold text-gray-800 mb-2">Video Summary</h2>
-      <p>{videoSummary}</p>
-    </div>
-  )}
+
+              {/* Language Selection */}
+              <div className="grid grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-white text-lg font-medium mb-4">Target Language</label>
+                  <select
+                    value={language}
+                    onChange={(e) => setLanguage(e.target.value)}
+                    className="w-full px-4 py-3 bg-white/20 border border-gray-300/30 rounded-lg text-white"
+                  >
+                    {languageOptions.map((option) => (
+                      <option key={option.value} value={option.value} className="text-black">
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-white text-lg font-medium mb-4">Caption Options</label>
+                  <select
+                    value={captionOption}
+                    onChange={(e) => setCaptionOption(e.target.value)}
+                    className="w-full px-4 py-3 bg-white/20 border border-gray-300/30 rounded-lg text-white"
+                  >
+                    {captionOptions.map((option) => (
+                      <option key={option.value} value={option.value} className="text-black">
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Convert Button */}
+              <button
+                onClick={handleUpload}
+                disabled={loading}
+                className={`w-full py-4 rounded-lg text-white font-semibold text-lg transition-all ${
+                  loading
+                    ? "bg-blue-400/50 cursor-not-allowed"
+                    : "bg-blue-600 hover:bg-blue-700"
+                }`}
+              >
+                {loading ? (
+                  <div className="flex items-center justify-center">
+                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white mr-2"></div>
+                    Processing...
+                  </div>
+                ) : (
+                  "Start Translation"
+                )}
+              </button>
+
+              {errorMessage && (
+                <div className="text-red-400 text-sm font-medium">{errorMessage}</div>
+              )}
+            </div>
+          </div>
+
+          {/* Results Section */}
+          {(videoFile || translatedVideo || videoSummary || transcription) && (
+            <div className="max-w-4xl mx-auto mt-12 space-y-8">
+              {/* Video Players */}
+              <div className="grid grid-cols-2 gap-6">
+                {videoFile && (
+                  <div className="bg-white/10 backdrop-blur-md rounded-xl p-6">
+                    <h3 className="text-white font-medium mb-4">Original Video</h3>
+                    <video 
+                      src={URL.createObjectURL(videoFile)} 
+                      controls 
+                      className="w-full"
+                    />
+                  </div>
+                )}
+                
+                {translatedVideo && (
+                  <div className="bg-white/10 backdrop-blur-md rounded-xl p-6">
+                    <h3 className="text-white font-medium mb-4">Translated Video</h3>
+                    <video 
+                      src={translatedVideo} 
+                      controls 
+                      className="w-full"
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Summary and Transcription */}
+              {(videoSummary || transcription) && (
+                <div className="grid grid-cols-2 gap-6">
+                  {videoSummary && (
+                    <div className="bg-white/10 backdrop-blur-md rounded-xl p-6">
+                      <h2 className="text-white font-medium text-2xl mb-4">Video Summary</h2>
+                      <p className="text-gray-300">{videoSummary}</p>
+                    </div>
+                  )}
+                  
+                  {transcription && (
+                    <div className="bg-white/10 backdrop-blur-md rounded-xl p-6">
+                      <h3 className="text-white font-medium mb-4 text-2xl">Transcription</h3>
+                      <p className="text-gray-300">{transcription}</p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Features Section */}
+        <div ref={featuresRef} className="py-20 px-4 bg-black/20">
+          <div className="max-w-4xl mx-auto">
+            <h2 className="text-4xl font-bold text-white text-center mb-12">Features</h2>
+            <div className="grid grid-cols-3 gap-6">
+              <Feature
+                icon={<Globe size={24} />}
+                title="Multi-Language"
+                description="Support for 20+ languages with natural voice synthesis"
+              />
+              <Feature
+                icon={<MessageSquare size={24} />}
+                title="Smart Captions"
+                description="Automatic caption generation and translation"
+              />
+              <Feature
+                icon={<Zap size={24} />}
+                title="Fast Processing"
+                description="Quick translation with AI-powered technology"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* How It Works Section */}
+        <div ref={howItWorksRef} className="py-20 px-4">
+          <div className="max-w-4xl mx-auto">
+            <h2 className="text-4xl font-bold text-white text-center mb-12">How It Works</h2>
+            <div className="grid grid-cols-3 gap-6">
+              <Step
+                icon={<Upload size={24} />}
+                title="Upload Video"
+                description="Upload your video file in MP4 or MOV format"
+                step={1}
+              />
+              <Step
+                icon={<Settings size={24} />}
+                title="Choose Settings"
+                description="Select your target language and caption preferences"
+                step={2}
+              />
+              <Step
+                icon={<Play size={24} />}
+                title="Get Results"
+                description="Receive your translated video with natural voice and captions"
+                step={3}
+              />
+            </div>
           </div>
         </div>
       </div>
-    </>
+    </div>
   );
 }
+
+// Feature Component
+const Feature = ({ icon, title, description }) => (
+  <div className="text-center p-6 bg-white/5 rounded-xl">
+    <div className="inline-block p-3 bg-white/10 rounded-lg text-white mb-4">
+      {icon}
+    </div>
+    <h3 className="text-white font-medium mb-2">{title}</h3>
+    <p className="text-gray-400 text-sm">{description}</p>
+  </div>
+);
+
+// Step Component
+const Step = ({ icon, title, description, step }) => (
+  <div className="text-center p-6 bg-white/5 rounded-xl relative">
+    <div className="absolute -top-4 left-1/2 -translate-x-1/2 w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold">
+      {step}
+    </div>
+    <div className="inline-block p-3 bg-white/10 rounded-lg text-white mb-4">
+      {icon}
+    </div>
+    <h3 className="text-white font-medium mb-2">{title}</h3>
+    <p className="text-gray-400 text-sm">{description}</p>
+  </div>
+);
 
 export default App;
