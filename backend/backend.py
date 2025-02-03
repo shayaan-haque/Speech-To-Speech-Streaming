@@ -13,6 +13,9 @@ from dotenv import load_dotenv
 import pysrt
 from pysrt import SubRipFile, SubRipItem, SubRipTime
 from datetime import timedelta
+import yt_dlp
+import googleapiclient.discovery
+import re
 
 load_dotenv()
 app = Flask(__name__)
@@ -21,6 +24,112 @@ app.config['UPLOAD_FOLDER'] = './uploads'
 app.config['OUTPUT_FOLDER'] = './output_videos'
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 os.makedirs(app.config['OUTPUT_FOLDER'], exist_ok=True)
+
+MAX_VIDEO_DURATION = 60  # Maximum duration in seconds
+YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY")  # Your YouTube Data API v3 key
+
+def is_youtube_url(url):
+    youtube_regex = (
+        r'^(?:https?:\/\/)?(?:www\.)?'  # Optional http/https and www.
+        r'(?:youtube\.com|youtu\.be)\/'  # Matches youtube.com or youtu.be
+        r'(?:watch\?v=|embed\/|v\/|.+\?v=)?'  # Different video URL formats
+        r'([a-zA-Z0-9_-]{11})$'  # Captures the 11-character video ID
+    )
+    return bool(re.match(youtube_regex, url))
+
+def get_video_duration(video_id):
+    """
+    Fetch video duration using YouTube Data API v3.
+    """
+    youtube = googleapiclient.discovery.build("youtube", "v3", developerKey=YOUTUBE_API_KEY)
+    request = youtube.videos().list(part="contentDetails", id=video_id)
+    response = request.execute()
+    
+    if not response.get("items"):
+        raise Exception("Video not found or API key invalid.")
+    
+    duration_str = response["items"][0]["contentDetails"]["duration"]
+    duration = parse_youtube_duration(duration_str)
+    return duration
+
+def parse_youtube_duration(duration_str):
+    """
+    Parse YouTube's duration format (ISO 8601, e.g., PT8M13S) into seconds.
+    """
+    duration_str = duration_str.lower()  # Convert to lowercase for easier parsing
+    total_seconds = 0
+    
+    # Remove the 'PT' prefix
+    duration_str = duration_str.replace("pt", "")
+    
+    # Parse hours
+    if "h" in duration_str:
+        hours, duration_str = duration_str.split("h")
+        total_seconds += int(hours) * 3600
+    
+    # Parse minutes
+    if "m" in duration_str:
+        minutes, duration_str = duration_str.split("m")
+        total_seconds += int(minutes) * 60
+    
+    # Parse seconds
+    if "s" in duration_str:
+        seconds = duration_str.replace("s", "")
+        total_seconds += int(seconds)
+    
+    return total_seconds
+
+def download_youtube_video(url):
+    """
+    Download YouTube video using yt-dlp.
+    """
+    try:
+        video_id = re.search(r'v=([a-zA-Z0-9_-]{11})', url).group(1)
+        duration = get_video_duration(video_id)
+        
+        if duration > MAX_VIDEO_DURATION:
+            # Download the full video
+            ydl_opts = {
+                'format': 'best',
+                'outtmpl': os.path.join(app.config['UPLOAD_FOLDER'], 'temp_full.%(ext)s'),
+                'quiet': True,
+            }
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                info_dict = ydl.extract_info(url, download=True)
+                actual_file_path = ydl.prepare_filename(info_dict)
+            
+            # Cut the video to 60 seconds
+            output_path = os.path.join(app.config['UPLOAD_FOLDER'], 'youtube_video.mp4')
+            cut_video(actual_file_path, output_path, MAX_VIDEO_DURATION)
+            
+            os.remove(actual_file_path)  # Cleanup
+            return output_path
+        else:
+            # Directly download if under 60 seconds
+            ydl_opts = {
+                'format': 'best',
+                'outtmpl': os.path.join(app.config['UPLOAD_FOLDER'], 'youtube_video.%(ext)s'),
+                'quiet': True,
+            }
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                info_dict = ydl.extract_info(url, download=True)
+                actual_file_path = ydl.prepare_filename(info_dict)
+            return actual_file_path
+    except Exception as e:
+        raise Exception(f"Error downloading YouTube video: {str(e)}")
+
+def cut_video(input_path, output_path, duration):
+    """
+    Cut a video to the specified duration using ffmpeg.
+    """
+    command = [
+        'ffmpeg', '-y', '-i', input_path,
+        '-t', str(duration),
+        '-c:v', 'copy', '-c:a', 'copy',
+        output_path
+    ]
+    subprocess.run(command, check=True)
+
 
 LANGUAGE_TO_VOICE = {
     # Arabic
@@ -277,16 +386,25 @@ def generate_summary(text):
 
 @app.route('/upload', methods=['POST'])
 async def process_video():
-    file = request.files['video']
-    language = request.form['language']
-    caption_option = request.form['caption_option']
-    
-    if file:
-        video_filename = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
-        file.save(video_filename)
+    video_path = None
+    try:
+        language = request.form['language']
+        caption_option = request.form['caption_option']
+        
+        youtube_url = request.form.get('youtube_url')
+        if youtube_url:
+            if not is_youtube_url(youtube_url):
+                return jsonify({"error": "Invalid YouTube URL"}), 400
+            video_path = download_youtube_video(youtube_url)
+        else:
+            file = request.files.get('video')
+            if not file:
+                return jsonify({"error": "No file or YouTube URL provided"}), 400
+            video_path = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
+            file.save(video_path)
         
         audio_path = './uploads/extracted_audio.mp3'
-        extract_audio(video_filename, audio_path)
+        extract_audio(video_path, audio_path)
         
         transcribed_data = whisper.load_model("base").transcribe(audio_path)
         summary = generate_summary(transcribed_data['text'])
@@ -305,7 +423,7 @@ async def process_video():
         adjust_audio_length(translated_audio_path, audio_path, adjusted_audio_path)
         
         temp_video_path = './output_videos/temp_video.mp4'
-        replace_audio(video_filename, adjusted_audio_path, temp_video_path)
+        replace_audio(video_path, adjusted_audio_path, temp_video_path)
         
         final_video_path = os.path.abspath("./output_videos/translated_with_captions.mp4")
         if caption_option != "none":
@@ -320,7 +438,14 @@ async def process_video():
             "transcription": translated_text
         })
     
-    return jsonify({"error": "No file uploaded"}), 400
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        if video_path and 'youtube_video.mp4' in video_path:
+            try:
+                os.remove(video_path)
+            except:
+                pass
 
 @app.route('/download/<path:filename>', methods=['GET'])
 def download_video(filename):

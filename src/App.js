@@ -1,8 +1,10 @@
 import React, { useState, useRef } from "react";
-import { Globe, MessageSquare, Zap, Upload, Settings, Play } from 'lucide-react';
+import { Globe, MessageSquare, Zap, Upload, Settings, Play, Youtube } from 'lucide-react';
 
 function App() {
   const [videoFile, setVideoFile] = useState(null);
+  const [youtubeUrl, setYoutubeUrl] = useState("");
+  const [uploadType, setUploadType] = useState("file"); // "file" or "youtube"
   const [language, setLanguage] = useState("en");
   const [captionOption, setCaptionOption] = useState("none");
   const [translatedVideo, setTranslatedVideo] = useState("");
@@ -19,7 +21,6 @@ function App() {
     ref.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
-  // Rest of the state and handlers remain the same...
   const languageOptions = [
     { label: "Arabic", value: "ar" },
     { label: "Chinese", value: "zh" },
@@ -57,21 +58,34 @@ function App() {
 
   const handleFileChange = (event) => {
     setVideoFile(event.target.files[0]);
+    setYoutubeUrl("");
+    setUploadType("file");
+    setErrorMessage("");
+  };
+
+  const handleYoutubeUrlChange = (event) => {
+    setYoutubeUrl(event.target.value);
+    setVideoFile(null);
+    setUploadType("youtube");
     setErrorMessage("");
   };
 
   const handleUpload = async () => {
-    if (!videoFile || !language) {
+    if ((!videoFile && !youtubeUrl) || !language) {
       setErrorMessage(
-        !videoFile
-          ? "Please upload a video file."
+        !videoFile && !youtubeUrl
+          ? "Please upload a video file or provide a YouTube URL."
           : "Please select a language."
       );
       return;
     }
 
     const formData = new FormData();
-    formData.append("video", videoFile);
+    if (uploadType === "file") {
+      formData.append("video", videoFile);
+    } else {
+      formData.append("youtube_url", youtubeUrl);
+    }
     formData.append("language", language);
     formData.append("caption_option", captionOption);
 
@@ -83,6 +97,11 @@ function App() {
         body: formData,
       });
       const data = await response.json();
+      
+      if (data.error) {
+        setErrorMessage(data.error);
+        return;
+      }
       
       const videoUrl = `http://127.0.0.1:5000/output_videos/${data.output_video}`;
       setTranslatedVideo(videoUrl);
@@ -129,22 +148,68 @@ function App() {
             Transform Your Videos Into Any Language
           </h1>
           <p className="text-xl text-gray-300 mb-8">
-            Upload your video and get instant translations with perfect meaning and natural voices
+            Upload your video or paste a YouTube URL and get instant translations with perfect meaning and natural voices
           </p>
           
           {/* Main Upload Section */}
           <div className="max-w-4xl mx-auto bg-white/10 backdrop-blur-md rounded-xl p-8 shadow-2xl">
-            {/* Existing upload form content... */}
             <div className="grid gap-8">
-              {/* File Upload */}
+              {/* Upload Type Selection */}
+              <div className="flex gap-4 justify-center">
+                <button
+                  onClick={() => setUploadType("file")}
+                  className={`px-6 py-2 rounded-lg transition-all ${
+                    uploadType === "file"
+                      ? "bg-blue-600 text-white"
+                      : "bg-white/20 text-gray-300"
+                  }`}
+                >
+                  <span className="flex items-center gap-2">
+                    <Upload size={20} />
+                    Upload File
+                  </span>
+                </button>
+                <button
+                  onClick={() => setUploadType("youtube")}
+                  className={`px-6 py-2 rounded-lg transition-all ${
+                    uploadType === "youtube"
+                      ? "bg-blue-600 text-white"
+                      : "bg-white/20 text-gray-300"
+                  }`}
+                >
+                  <span className="flex items-center gap-2">
+                    <Youtube size={20} />
+                    YouTube URL
+                  </span>
+                </button>
+              </div>
+
+              {/* File Upload or YouTube URL Input */}
               <div>
-                <label className="block text-white text-lg font-medium mb-4">Upload Video</label>
-                <input
-                  type="file"
-                  accept="video/mp4, video/mov"
-                  onChange={handleFileChange}
-                  className="w-full px-4 py-3 bg-white/20 border border-gray-300/30 rounded-lg text-white"
-                />
+                {uploadType === "file" ? (
+                  <>
+                    <label className="block text-white text-lg font-medium mb-4">Upload Video</label>
+                    <input
+                      type="file"
+                      accept="video/mp4,video/mov"
+                      onChange={handleFileChange}
+                      className="w-full px-4 py-3 bg-white/20 border border-gray-300/30 rounded-lg text-white"
+                    />
+                  </>
+                ) : (
+                  <>
+                    <label className="block text-white text-lg font-medium mb-4">
+                      YouTube URL (max 1 minute)
+                    </label>
+                    <input
+                      type="text"
+                      value={youtubeUrl}
+                      onChange={handleYoutubeUrlChange}
+                      placeholder="https://www.youtube.com/watch?v=..."
+                      className="w-full px-4 py-3 bg-white/20 border border-gray-300/30 rounded-lg text-white"
+                    />
+                  </>
+                )}
               </div>
 
               {/* Language Selection */}
@@ -207,11 +272,11 @@ function App() {
           </div>
 
           {/* Results Section */}
-          {(videoFile || translatedVideo || videoSummary || transcription) && (
+          {(videoFile || youtubeUrl || translatedVideo || videoSummary || transcription) && (
             <div className="max-w-4xl mx-auto mt-12 space-y-8">
               {/* Video Players */}
               <div className="grid grid-cols-2 gap-6">
-                {videoFile && (
+                {videoFile && uploadType === "file" && (
                   <div className="bg-white/10 backdrop-blur-md rounded-xl p-6">
                     <h3 className="text-white font-medium mb-4">Original Video</h3>
                     <video 
@@ -286,9 +351,9 @@ function App() {
             <h2 className="text-4xl font-bold text-white text-center mb-12">How It Works</h2>
             <div className="grid grid-cols-3 gap-6">
               <Step
-                icon={<Upload size={24} />}
-                title="Upload Video"
-                description="Upload your video file in MP4 or MOV format"
+                icon={uploadType === "youtube" ? <Youtube size={24} /> : <Upload size={24} />}
+                title={uploadType === "youtube" ? "Add YouTube URL" : "Upload Video"}
+                description={uploadType === "youtube" ? "Paste a YouTube video URL (max 1 min)" : "Upload your video file in MP4 or MOV format"}
                 step={1}
               />
               <Step
@@ -310,7 +375,6 @@ function App() {
     </div>
   );
 }
-
 // Feature Component
 const Feature = ({ icon, title, description }) => (
   <div className="text-center p-6 bg-white/5 rounded-xl">
