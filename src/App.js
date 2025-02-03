@@ -278,28 +278,45 @@ function App() {
             <div className="max-w-4xl mx-auto mt-12 space-y-8">
               {/* Video Players */}
               <div className="grid grid-cols-2 gap-6">
-                {videoFile && uploadType === "file" && (
-                  <div className="bg-white/10 backdrop-blur-md rounded-xl p-6">
-                    <h3 className="text-white font-medium mb-4">Original Video</h3>
-                    <video 
-                      src={URL.createObjectURL(videoFile)} 
-                      controls 
-                      className="w-full"
-                    />
-                  </div>
-                )}
-                
-                {translatedVideo && (
-                  <div className="bg-white/10 backdrop-blur-md rounded-xl p-6">
-                    <h3 className="text-white font-medium mb-4">Translated Video</h3>
-                    <video 
-                      src={translatedVideo} 
-                      controls 
-                      className="w-full"
-                    />
-                  </div>
-                )}
-              </div>
+  {/* Show original video if uploaded from file */}
+  {videoFile && uploadType === "file" && (
+    <div className="bg-white/10 backdrop-blur-md rounded-xl p-6">
+      <h3 className="text-white font-medium mb-4">Original Video</h3>
+      <video 
+        src={URL.createObjectURL(videoFile)} 
+        controls 
+        className="w-full"
+      />
+    </div>
+  )}
+
+  {/* Show original video if uploaded from YouTube */}
+  {youtubeUrl && uploadType === "youtube" && (
+    <div className="bg-white/10 backdrop-blur-md rounded-xl p-6">
+      <h3 className="text-white font-medium mb-4">Original Video</h3>
+      <iframe 
+        width="100%" 
+        height="315" 
+        src={`https://www.youtube.com/embed/${youtubeUrl.split("v=")[1].split("&")[0]}`} 
+        title="YouTube Video"
+        frameBorder="0"
+        allowFullScreen
+      ></iframe>
+    </div>
+  )}
+
+  {/* Show translated video */}
+  {translatedVideo && (
+    <div className="bg-white/10 backdrop-blur-md rounded-xl p-6">
+      <h3 className="text-white font-medium mb-4">Translated Video</h3>
+      <video 
+        src={translatedVideo} 
+        controls 
+        className="w-full"
+      />
+    </div>
+  )}
+</div>
 
               {/* Summary and Transcription */}
               {(videoSummary || transcription) && (
