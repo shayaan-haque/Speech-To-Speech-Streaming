@@ -50,12 +50,14 @@ function App() {
   const captionOptions = [
     { label: "No Captions", value: "none" },
     { label: "Captions in Converted Language", value: "translated" },
-    ...languageOptions.map(lang => ({
-      label: `${lang.label}`,
-      value: lang.value 
-    }))
+    ...languageOptions
+      .filter(lang => lang.value !== "zh")  
+      .map(lang => ({
+        label: `${lang.label}`,
+        value: lang.value
+      }))
   ];
-
+  
   const handleFileChange = (event) => {
     setVideoFile(event.target.files[0]);
     setYoutubeUrl("");
